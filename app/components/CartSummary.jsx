@@ -16,7 +16,8 @@ export function CartSummary({cart, layout}) {
 
   return (
     <div aria-labelledby={summaryId} className={className}>
-      <h4 id={summaryId}>Totals</h4>
+      <FreeShippingProgress subtotal={Number(cart?.cost?.subtotalAmount?.amount || 0)} currency={cart?.cost?.subtotalAmount?.currencyCode} />
+      <h4 id={summaryId}>Order summary</h4>
       <dl role="group" className="cart-subtotal">
         <dt>Subtotal</dt>
         <dd>
@@ -50,10 +51,23 @@ function CartCheckoutActions({checkoutUrl}) {
 
   return (
     <div>
-      <a href={checkoutUrl} target="_self">
-        <p>Continue to Checkout &rarr;</p>
+      <a className="button button--checkout" href={checkoutUrl} target="_self">
+        Checkout securely &rarr;
       </a>
-      <br />
+      <p className="checkout-note">Taxes and shipping calculated at checkout</p>
+    </div>
+  );
+}
+
+function FreeShippingProgress({subtotal, currency = 'USD'}) {
+  const threshold = 50;
+  const remaining = Math.max(0, threshold - subtotal);
+  const progress = Math.min(100, (subtotal / threshold) * 100);
+  const money = new Intl.NumberFormat(undefined, {style: 'currency', currency}).format(remaining);
+  return (
+    <div className="shipping-progress">
+      <p>{remaining > 0 ? <>Add <strong>{money}</strong> more for free shipping</> : <strong>You unlocked free shipping! ✦</strong>}</p>
+      <div aria-label={`${Math.round(progress)}% toward free shipping`} className="shipping-progress__track" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin="0" aria-valuemax="100"><span style={{width: `${progress}%`}} /></div>
     </div>
   );
 }

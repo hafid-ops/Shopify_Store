@@ -1,130 +1,28 @@
+import {Await, Link, NavLink} from 'react-router';
 import {Suspense} from 'react';
-import {Await, NavLink} from 'react-router';
+import {NewsletterForm} from './NewsletterForm';
+import {Icon} from './Icon';
 
-/**
- * @param {FooterProps}
- */
 export function Footer({footer: footerPromise, header, publicStoreDomain}) {
   return (
-    <Suspense>
-      <Await resolve={footerPromise}>
-        {(footer) => (
-          <footer className="footer">
-            {footer?.menu && header.shop.primaryDomain?.url && (
-              <FooterMenu
-                menu={footer.menu}
-                primaryDomainUrl={header.shop.primaryDomain.url}
-                publicStoreDomain={publicStoreDomain}
-              />
-            )}
-          </footer>
-        )}
-      </Await>
-    </Suspense>
+    <footer className="footer">
+      <div className="footer__top">
+        <div className="footer__brand"><Link className="wordmark wordmark--light" to="/">SOCK<span>POP</span></Link><p>Color for every step.<br/>Comfort for every day.</p><div className="socials"><a href="https://instagram.com" aria-label="Instagram"><Icon name="instagram" /></a><a href="https://tiktok.com" aria-label="TikTok">♪</a><a href="https://pinterest.com" aria-label="Pinterest">P</a></div></div>
+        <div><h2>Shop</h2><Link to="/collections/all">All socks</Link><Link to="/collections/crew-socks">Crew socks</Link><Link to="/collections/ankle-socks">Ankle socks</Link><Link to="/collections/gift-sets">Gift sets</Link></div>
+        <div><h2>Help</h2><Link to="/pages/contact">Contact</Link><Link to="/pages/size-guide">Size guide</Link><Link to="/policies/shipping-policy">Shipping & returns</Link><Link to="/policies/refund-policy">Refunds</Link></div>
+        <div className="footer__signup"><h2>Get the good stuff</h2><p>New socks, special drops, no boring emails.</p><NewsletterForm compact /></div>
+      </div>
+      <Suspense fallback={null}><Await resolve={footerPromise}>{(footer) => footer?.menu && <FooterMenu menu={footer.menu} header={header} publicStoreDomain={publicStoreDomain} />}</Await></Suspense>
+      <div className="footer__bottom"><span>© {new Date().getFullYear()} SOCKPOP</span><div className="payments" aria-label="Accepted payments"><span>VISA</span><span>MC</span><span>AMEX</span><span>Pay</span></div><span>Made with happy feet.</span></div>
+    </footer>
   );
 }
 
-/**
- * @param {{
- *   menu: FooterQuery['menu'];
- *   primaryDomainUrl: FooterProps['header']['shop']['primaryDomain']['url'];
- *   publicStoreDomain: string;
- * }}
- */
-function FooterMenu({menu, primaryDomainUrl, publicStoreDomain}) {
-  return (
-    <nav className="footer-menu" role="navigation">
-      {(menu || FALLBACK_FOOTER_MENU).items.map((item) => {
-        if (!item.url) return null;
-        // if the url is internal, we strip the domain
-        const url =
-          item.url.includes('myshopify.com') ||
-          item.url.includes(publicStoreDomain) ||
-          item.url.includes(primaryDomainUrl)
-            ? new URL(item.url).pathname
-            : item.url;
-        const isExternal = !url.startsWith('/');
-        return isExternal ? (
-          <a href={url} key={item.id} rel="noopener noreferrer" target="_blank">
-            {item.title}
-          </a>
-        ) : (
-          <NavLink
-            end
-            key={item.id}
-            prefetch="intent"
-            style={activeLinkStyle}
-            to={url}
-          >
-            {item.title}
-          </NavLink>
-        );
-      })}
-    </nav>
-  );
+function FooterMenu({menu, header, publicStoreDomain}) {
+  return <nav className="footer-menu" aria-label="Legal">{menu.items.slice(0, 4).map((item) => {
+    if (!item.url) return null;
+    const internal = item.url.includes('myshopify.com') || item.url.includes(publicStoreDomain) || item.url.includes(header.shop.primaryDomain.url);
+    const url = internal ? new URL(item.url).pathname : item.url;
+    return <NavLink key={item.id} to={url}>{item.title}</NavLink>;
+  })}</nav>;
 }
-
-const FALLBACK_FOOTER_MENU = {
-  id: 'gid://shopify/Menu/199655620664',
-  items: [
-    {
-      id: 'gid://shopify/MenuItem/461633060920',
-      resourceId: 'gid://shopify/ShopPolicy/23358046264',
-      tags: [],
-      title: 'Privacy Policy',
-      type: 'SHOP_POLICY',
-      url: '/policies/privacy-policy',
-      items: [],
-    },
-    {
-      id: 'gid://shopify/MenuItem/461633093688',
-      resourceId: 'gid://shopify/ShopPolicy/23358013496',
-      tags: [],
-      title: 'Refund Policy',
-      type: 'SHOP_POLICY',
-      url: '/policies/refund-policy',
-      items: [],
-    },
-    {
-      id: 'gid://shopify/MenuItem/461633126456',
-      resourceId: 'gid://shopify/ShopPolicy/23358111800',
-      tags: [],
-      title: 'Shipping Policy',
-      type: 'SHOP_POLICY',
-      url: '/policies/shipping-policy',
-      items: [],
-    },
-    {
-      id: 'gid://shopify/MenuItem/461633159224',
-      resourceId: 'gid://shopify/ShopPolicy/23358079032',
-      tags: [],
-      title: 'Terms of Service',
-      type: 'SHOP_POLICY',
-      url: '/policies/terms-of-service',
-      items: [],
-    },
-  ],
-};
-
-/**
- * @param {{
- *   isActive: boolean;
- *   isPending: boolean;
- * }}
- */
-function activeLinkStyle({isActive, isPending}) {
-  return {
-    fontWeight: isActive ? 'bold' : undefined,
-    color: isPending ? 'grey' : 'white',
-  };
-}
-
-/**
- * @typedef {Object} FooterProps
- * @property {Promise<FooterQuery|null>} footer
- * @property {HeaderQuery} header
- * @property {string} publicStoreDomain
- */
-
-/** @typedef {import('storefrontapi.generated').FooterQuery} FooterQuery */
-/** @typedef {import('storefrontapi.generated').HeaderQuery} HeaderQuery */

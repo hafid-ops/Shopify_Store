@@ -1,243 +1,141 @@
-import {useLoaderData} from 'react-router';
+import {Await, useLoaderData} from 'react-router';
+import {Suspense} from 'react';
 import {
-  getSelectedProductOptions,
-  Analytics,
-  useOptimisticVariant,
-  getProductOptions,
-  getAdjacentAndFirstAvailableVariants,
-  useSelectedOptionInUrlParam,
+  Analytics, getAdjacentAndFirstAvailableVariants, getProductOptions,
+  getSelectedProductOptions, useOptimisticVariant, useSelectedOptionInUrlParam,
 } from '@shopify/hydrogen';
 import {ProductPrice} from '~/components/ProductPrice';
-import {ProductImage} from '~/components/ProductImage';
+import {ProductGallery} from '~/components/ProductGallery';
 import {ProductForm} from '~/components/ProductForm';
+import {ProductCard} from '~/components/ProductCard';
 import {redirectIfHandleIsLocalized} from '~/lib/redirect';
 
-/**
- * @type {Route.MetaFunction}
- */
-export const meta = ({data}) => {
-  return [
-    {title: `Hydrogen | ${data?.product.title ?? ''}`},
-    {
-      rel: 'canonical',
-      href: `/products/${data?.product.handle}`,
-    },
-  ];
-};
+export const meta = ({data}) => [
+  {title: `${data?.product.seo?.title || data?.product.title || 'Socks'} — SOCKPOP`},
+  {name: 'description', content: data?.product.seo?.description || data?.product.description},
+  {rel: 'canonical', href: `/products/${data?.product.handle}`},
+];
 
-/**
- * @param {Route.LoaderArgs} args
- */
-export async function loader(args) {
-  // Start fetching non-critical data without blocking time to first byte
-  const deferredData = loadDeferredData(args);
-
-  // Await the critical data required to render initial state of the page
-  const criticalData = await loadCriticalData(args);
-
-  return {...deferredData, ...criticalData};
-}
-
-/**
- * Load data necessary for rendering content above the fold. This is the critical data
- * needed to render the page. If it's unavailable, the whole page should 400 or 500 error.
- * @param {Route.LoaderArgs}
- */
-async function loadCriticalData({context, params, request}) {
+export async function loader({context, params, request}) {
   const {handle} = params;
-  const {storefront} = context;
+  if (!handle) throw new Error('Expected product handle');
 
-  if (!handle) {
-    throw new Error('Expected product handle to be defined');
-  }
-
-  const [{product}] = await Promise.all([
-    storefront.query(PRODUCT_QUERY, {
-      variables: {handle, selectedOptions: getSelectedProductOptions(request)},
-    }),
-    // Add other queries here, so that they are loaded in parallel
-  ]);
-
-  if (!product?.id) {
-    throw new Response(null, {status: 404});
-  }
-
-  // The API handle might be localized, so redirect to the localized handle
+  const {product} = await context.storefront.query(PRODUCT_QUERY, {
+    cache: context.storefront.CacheShort(),
+    variables: {handle, selectedOptions: getSelectedProductOptions(request)},
+  });
+  if (!product?.id) throw new Response(null, {status: 404});
   redirectIfHandleIsLocalized(request, {handle, data: product});
 
-  return {
-    product,
-  };
-}
-
-/**
- * Load data for rendering content below the fold. This data is deferred and will be
- * fetched after the initial page load. If it's unavailable, the page should still 200.
- * Make sure to not throw any errors here, as it will cause the page to 500.
- * @param {Route.LoaderArgs}
- */
-function loadDeferredData({context, params}) {
-  // Put any API calls that is not critical to be available on first page render
-  // For example: product reviews, product recommendations, social feeds.
-
-  return {};
+  const related = context.storefront.query(RELATED_QUERY, {
+    cache: context.storefront.CacheShort(),
+    variables: {productId: product.id},
+  }).catch(() => null);
+  return {product, related, storeDomain: context.env.PUBLIC_STORE_DOMAIN};
 }
 
 export default function Product() {
-  /** @type {LoaderReturnData} */
-  const {product} = useLoaderData();
-
-  // Optimistically selects a variant with given available variant information
+  const {product, related, storeDomain} = useLoaderData();
   const selectedVariant = useOptimisticVariant(
     product.selectedOrFirstAvailableVariant,
     getAdjacentAndFirstAvailableVariants(product),
   );
-
-  // Sets the search param to the selected variant without navigation
-  // only when no search params are set in the url
   useSelectedOptionInUrlParam(selectedVariant.selectedOptions);
-
-  // Get the product options array
-  const productOptions = getProductOptions({
-    ...product,
-    selectedOrFirstAvailableVariant: selectedVariant,
-  });
-
-  const {title, descriptionHtml} = product;
+  const productOptions = getProductOptions({...product, selectedOrFirstAvailableVariant: selectedVariant});
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: product.description,
+    image: product.images.nodes.map((image) => image.url),
+    sku: selectedVariant?.sku,
+    brand: {'@type': 'Brand', name: product.vendor || 'SOCKPOP'},
+    offers: {
+      '@type': 'Offer',
+      url: `https://${storeDomain}/products/${product.handle}`,
+      priceCurrency: selectedVariant?.price.currencyCode,
+      price: selectedVariant?.price.amount,
+      availability: selectedVariant?.availableForSale ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    },
+  };
 
   return (
-    <div className="product">
-      <ProductImage image={selectedVariant?.image} />
-      <div className="product-main">
-        <h1>{title}</h1>
-        <ProductPrice
-          price={selectedVariant?.price}
-          compareAtPrice={selectedVariant?.compareAtPrice}
-        />
-        <br />
-        <ProductForm
-          productOptions={productOptions}
-          selectedVariant={selectedVariant}
-        />
-        <br />
-        <br />
-        <p>
-          <strong>Description</strong>
-        </p>
-        <br />
-        <div dangerouslySetInnerHTML={{__html: descriptionHtml}} />
-        <br />
+    <div className="product-page">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(jsonLd)}} />
+      <div className="product-layout section">
+        <ProductGallery images={product.images} selectedImage={selectedVariant?.image} />
+        <div className="product-details">
+          <p className="eyebrow">{product.vendor || 'SOCKPOP ORIGINAL'}</p>
+          <h1>{product.title}</h1>
+          <div className="product-details__rating"><span>★★★★★</span> <a href="#details">4.9 · 127 reviews</a></div>
+          <ProductPrice price={selectedVariant?.price} compareAtPrice={selectedVariant?.compareAtPrice} />
+          <p className="product-details__intro">{product.description}</p>
+          <ProductForm productOptions={productOptions} selectedVariant={selectedVariant} />
+          <div className="product-accordions" id="details">
+            <details open><summary>Details & care</summary><div dangerouslySetInnerHTML={{__html: product.descriptionHtml}} /></details>
+            <details><summary>Size guide</summary><p>S/M: US 4–8 · L/XL: US 9–13. Our flexible knit is designed to fit comfortably without slipping.</p></details>
+            <details><summary>Shipping & returns</summary><p>Free shipping over $50. Easy returns on unworn pairs within 30 days.</p></details>
+          </div>
+          <div className="product-perks"><span>☁ Soft combed cotton</span><span>↻ 30-day returns</span><span>✦ Made to last</span></div>
+        </div>
       </div>
-      <Analytics.ProductView
-        data={{
-          products: [
-            {
-              id: product.id,
-              title: product.title,
-              price: selectedVariant?.price.amount || '0',
-              vendor: product.vendor,
-              variantId: selectedVariant?.id || '',
-              variantTitle: selectedVariant?.title || '',
-              quantity: 1,
-            },
-          ],
-        }}
-      />
+
+      <section className="section related">
+        <div className="section-heading"><div><p className="eyebrow">KEEP THE GOOD TIMES GOING</p><h2>You may also <em>like</em></h2></div></div>
+        <Suspense fallback={null}>
+          <Await resolve={related}>
+            {(result) => <div className="product-carousel">{result?.productRecommendations.slice(0, 4).map((item) => <ProductCard key={item.id} product={item} />)}</div>}
+          </Await>
+        </Suspense>
+      </section>
+
+      <Analytics.ProductView data={{products: [{
+        id: product.id, title: product.title, price: selectedVariant?.price.amount || '0',
+        vendor: product.vendor, variantId: selectedVariant?.id || '',
+        variantTitle: selectedVariant?.title || '', quantity: 1,
+      }]}} />
     </div>
   );
 }
 
-const PRODUCT_VARIANT_FRAGMENT = `#graphql
+const VARIANT_FRAGMENT = `#graphql
   fragment ProductVariant on ProductVariant {
-    availableForSale
-    compareAtPrice {
-      amount
-      currencyCode
-    }
-    id
-    image {
-      __typename
-      id
-      url
-      altText
-      width
-      height
-    }
-    price {
-      amount
-      currencyCode
-    }
-    product {
-      title
-      handle
-    }
-    selectedOptions {
-      name
-      value
-    }
-    sku
-    title
-    unitPrice {
-      amount
-      currencyCode
-    }
+    availableForSale id sku title
+    compareAtPrice {amount currencyCode}
+    price {amount currencyCode}
+    image {id url altText width height}
+    product {title handle}
+    selectedOptions {name value}
   }
 `;
-
 const PRODUCT_FRAGMENT = `#graphql
   fragment Product on Product {
-    id
-    title
-    vendor
-    handle
-    descriptionHtml
-    description
-    encodedVariantExistence
-    encodedVariantAvailability
-    options {
-      name
-      optionValues {
-        name
-        firstSelectableVariant {
-          ...ProductVariant
-        }
-        swatch {
-          color
-          image {
-            previewImage {
-              url
-            }
-          }
-        }
-      }
-    }
-    selectedOrFirstAvailableVariant(selectedOptions: $selectedOptions, ignoreUnknownOptions: true, caseInsensitiveMatch: true) {
-      ...ProductVariant
-    }
-    adjacentVariants (selectedOptions: $selectedOptions) {
-      ...ProductVariant
-    }
-    seo {
-      description
-      title
-    }
+    id title vendor handle description descriptionHtml encodedVariantExistence encodedVariantAvailability
+    seo {description title}
+    images(first: 8) {nodes {id url altText width height}}
+    options {name optionValues {name firstSelectableVariant {...ProductVariant} swatch {color image {previewImage {url}}}}}
+    selectedOrFirstAvailableVariant(selectedOptions: $selectedOptions, ignoreUnknownOptions: true, caseInsensitiveMatch: true) {...ProductVariant}
+    adjacentVariants(selectedOptions: $selectedOptions) {...ProductVariant}
   }
-  ${PRODUCT_VARIANT_FRAGMENT}
+  ${VARIANT_FRAGMENT}
 `;
-
 const PRODUCT_QUERY = `#graphql
-  query Product(
-    $country: CountryCode
-    $handle: String!
-    $language: LanguageCode
-    $selectedOptions: [SelectedOptionInput!]!
-  ) @inContext(country: $country, language: $language) {
-    product(handle: $handle) {
-      ...Product
-    }
-  }
+  query Product($country: CountryCode, $handle: String!, $language: LanguageCode, $selectedOptions: [SelectedOptionInput!]!)
+  @inContext(country: $country, language: $language) {product(handle: $handle) {...Product}}
   ${PRODUCT_FRAGMENT}
+`;
+const RELATED_QUERY = `#graphql
+  fragment RelatedProduct on Product {
+    id handle title availableForSale
+    featuredImage {id url altText width height}
+    priceRange {minVariantPrice {amount currencyCode}}
+    compareAtPriceRange {minVariantPrice {amount currencyCode}}
+    options {name optionValues {name swatch {color}}}
+  }
+  query Related($productId: ID!, $country: CountryCode, $language: LanguageCode)
+  @inContext(country: $country, language: $language) {
+    productRecommendations(productId: $productId) {...RelatedProduct}
+  }
 `;
 
 /** @typedef {import('./+types/products.$handle').Route} Route */
-/** @typedef {ReturnType<typeof useLoaderData<typeof loader>>} LoaderReturnData */

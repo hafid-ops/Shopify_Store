@@ -49,7 +49,7 @@ export function PageLayout({
  */
 function CartAside({cart}) {
   return (
-    <Aside type="cart" heading="CART">
+    <Aside type="cart" heading="YOUR BAG">
       <Suspense fallback={<p>Loading cart ...</p>}>
         <Await resolve={cart}>
           {(cart) => {
@@ -64,23 +64,24 @@ function CartAside({cart}) {
 function SearchAside() {
   const queriesDatalistId = useId();
   return (
-    <Aside type="search" heading="SEARCH">
+    <Aside type="search" heading="FIND YOUR PAIR">
       <div className="predictive-search">
         <br />
         <SearchFormPredictive>
           {({fetchResults, goToSearch, inputRef}) => (
             <>
+              <div className="search-input-wrap">
               <input
                 name="q"
                 onChange={fetchResults}
                 onFocus={fetchResults}
-                placeholder="Search"
+                placeholder="Try “striped crew socks”"
                 ref={inputRef}
                 type="search"
                 list={queriesDatalistId}
               />
-              &nbsp;
-              <button onClick={goToSearch}>Search</button>
+              <button className="button button--dark" onClick={goToSearch}>Search</button>
+              </div>
             </>
           )}
         </SearchFormPredictive>

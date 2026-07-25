@@ -1,4 +1,5 @@
 import {Link, useNavigate} from 'react-router';
+import {useState} from 'react';
 import {AddToCartButton} from './AddToCartButton';
 import {useAside} from './Aside';
 
@@ -11,6 +12,7 @@ import {useAside} from './Aside';
 export function ProductForm({productOptions, selectedVariant}) {
   const navigate = useNavigate();
   const {open} = useAside();
+  const [quantity, setQuantity] = useState(1);
   return (
     <div className="product-form">
       {productOptions.map((option) => {
@@ -19,7 +21,7 @@ export function ProductForm({productOptions, selectedVariant}) {
 
         return (
           <div className="product-options" key={option.name}>
-            <h5>{option.name}</h5>
+            <h3>{option.name} <span>{option.optionValues.find((value) => value.selected)?.name}</span></h3>
             <div className="product-options-grid">
               {option.optionValues.map((value) => {
                 const {
@@ -46,12 +48,9 @@ export function ProductForm({productOptions, selectedVariant}) {
                       preventScrollReset
                       replace
                       to={`/products/${handle}?${variantUriQuery}`}
-                      style={{
-                        border: selected
-                          ? '1px solid black'
-                          : '1px solid transparent',
-                        opacity: available ? 1 : 0.3,
-                      }}
+                      aria-pressed={selected}
+                      data-available={available}
+                      data-selected={selected}
                     >
                       <ProductOptionSwatch swatch={swatch} name={name} />
                     </Link>
@@ -67,12 +66,9 @@ export function ProductForm({productOptions, selectedVariant}) {
                       type="button"
                       className={`product-options-item${exists && !selected ? ' link' : ''}`}
                       key={option.name + name}
-                      style={{
-                        border: selected
-                          ? '1px solid black'
-                          : '1px solid transparent',
-                        opacity: available ? 1 : 0.3,
-                      }}
+                      aria-pressed={selected}
+                      data-available={available}
+                      data-selected={selected}
                       disabled={!exists}
                       onClick={() => {
                         if (!selected) {
@@ -89,31 +85,30 @@ export function ProductForm({productOptions, selectedVariant}) {
                 }
               })}
             </div>
-            <br />
           </div>
         );
       })}
-      <AddToCartButton
-        disabled={!selectedVariant || !selectedVariant.availableForSale}
-        onClick={() => {
-          open('cart');
-        }}
-        lines={
-          selectedVariant
-            ? [
-                {
-                  merchandiseId: selectedVariant.id,
-                  quantity: 1,
-                  selectedVariant,
-                },
-              ]
-            : []
-        }
-      >
-        {selectedVariant?.availableForSale ? 'Add to cart' : 'Sold out'}
-      </AddToCartButton>
+      <div className="product-buy-row">
+        <div className="quantity" aria-label="Quantity selector">
+          <button aria-label="Decrease quantity" disabled={quantity === 1} onClick={() => setQuantity(Math.max(1, quantity - 1))} type="button">−</button>
+          <span aria-live="polite">{quantity}</span>
+          <button aria-label="Increase quantity" onClick={() => setQuantity(quantity + 1)} type="button">+</button>
+        </div>
+        <AddToCartButton
+          disabled={!selectedVariant || !selectedVariant.availableForSale}
+          onClick={() => open('cart')}
+          lines={selectedVariant ? [{merchandiseId: selectedVariant.id, quantity, selectedVariant}] : []}
+        >
+          {selectedVariant?.availableForSale ? 'Add to bag — ' : 'Sold out'}
+          {selectedVariant?.availableForSale && <ProductOptionPrice price={selectedVariant.price} quantity={quantity} />}
+        </AddToCartButton>
+      </div>
     </div>
   );
+}
+
+function ProductOptionPrice({price, quantity}) {
+  return new Intl.NumberFormat(undefined, {style: 'currency', currency: price.currencyCode}).format(Number(price.amount) * quantity);
 }
 
 /**

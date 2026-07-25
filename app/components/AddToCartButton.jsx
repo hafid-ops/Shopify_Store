@@ -26,11 +26,12 @@ export function AddToCartButton({
             value={JSON.stringify(analytics)}
           />
           <button
+            className={`add-to-cart ${fetcher.state !== 'idle' ? 'is-adding' : ''}`}
             type="submit"
             onClick={onClick}
             disabled={disabled ?? fetcher.state !== 'idle'}
           >
-            {children}
+            {fetcher.state !== 'idle' ? 'Adding…' : children}
           </button>
         </>
       )}
